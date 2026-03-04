@@ -3,8 +3,6 @@
 import { useAuth } from '@/lib/auth/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Icons } from '@/components/ui/icons'
-import Link from 'next/link'
 
 export default function DashboardPage() {
   const auth = useAuth()
@@ -12,21 +10,63 @@ export default function DashboardPage() {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
   const [message, setMessage] = useState('')
+  const [setupChecked, setSetupChecked] = useState(false)
 
   const isEmailUnverified = Boolean(user && user.email && user.primaryEmailVerified === false)
 
+  // 未ログイン時はサインインへ
   useEffect(() => {
     if (!user && !(auth as any).isLoading) {
       router.replace('/auth/signin')
     }
   }, [user, (auth as any).isLoading, router])
 
-  if (!user) {
+  // ログイン後、DB上のUserレコードがあるか確認。なければオンボーディングへ
+  useEffect(() => {
+    if (!user || setupChecked) return
+    let mounted = true
+
+    const checkSetup = async () => {
+      try {
+        // localStorageに工務店名があれば自動セットアップを試行
+        const pendingName = localStorage.getItem('pending_company_name')
+        if (pendingName) {
+          const res = await fetch('/api/auth/setup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ companyName: pendingName }),
+          })
+          if (mounted && res.ok) {
+            localStorage.removeItem('pending_company_name')
+            setSetupChecked(true)
+            return
+          }
+        }
+
+        // DB User の存在確認
+        const res = await fetch('/api/auth/me')
+        if (!mounted) return
+        if (res.status === 404) {
+          // User未登録 → オンボーディングへ
+          router.replace('/onboarding')
+          return
+        }
+        setSetupChecked(true)
+      } catch {
+        if (mounted) setSetupChecked(true)
+      }
+    }
+
+    checkSetup()
+    return () => { mounted = false }
+  }, [user, setupChecked, router])
+
+  if (!user || !setupChecked) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50">
         <div className="text-center p-8 bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl">
           <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">リダイレクト中...</h2>
+          <h2 className="text-lg font-semibold text-slate-900 mb-2">読み込み中...</h2>
         </div>
       </main>
     )

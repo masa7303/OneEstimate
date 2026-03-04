@@ -9,13 +9,13 @@ export default function SignUpPage() {
   const auth = useAuth()
   const user = auth.user
   const router = useRouter()
+  const [companyName, setCompanyName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [info, setInfo] = useState('')
 
-  // 既にログイン済みの場合はレンダー外で遷移
   useEffect(() => {
     if (user) router.replace('/dashboard')
   }, [user, router])
@@ -27,12 +27,17 @@ export default function SignUpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    
+
+    if (!companyName.trim()) {
+      setError('工務店名を入力してください')
+      return
+    }
+
     if (password.length < 8) {
       setError('パスワードは8文字以上で設定してください')
       return
     }
-    
+
     setIsLoading(true)
 
     try {
@@ -44,6 +49,8 @@ export default function SignUpPage() {
       })
 
       if (result.ok) {
+        // 工務店名をlocalStorageに一時保存（メール認証後のログイン時にCompany作成で使用）
+        try { localStorage.setItem('pending_company_name', companyName.trim()) } catch {}
         setInfo('確認メールを送信しました。メール内のリンクをクリックして認証を完了してください。')
       } else {
         if (result.error === 'USER_WITH_EMAIL_ALREADY_EXISTS') {
@@ -63,7 +70,14 @@ export default function SignUpPage() {
 
   const handleOAuthSignUp = async () => {
     setError('')
+
+    if (!companyName.trim()) {
+      setError('工務店名を入力してからGoogleで登録してください')
+      return
+    }
+
     setIsLoading(true)
+    try { localStorage.setItem('pending_company_name', companyName.trim()) } catch {}
 
     try {
       await auth.signInWithGoogle()
@@ -84,6 +98,22 @@ export default function SignUpPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label htmlFor="companyName" className="block text-xs font-medium text-slate-600 mb-1.5">
+                工務店名
+              </label>
+              <input
+                id="companyName"
+                type="text"
+                required
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white/50"
+                placeholder="例: 株式会社山田工務店"
+                disabled={isLoading}
+              />
+            </div>
+
             <div>
               <label htmlFor="email" className="block text-xs font-medium text-slate-600 mb-1.5">
                 メールアドレス
