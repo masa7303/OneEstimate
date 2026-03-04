@@ -56,6 +56,9 @@ function HeaderAuthed() {
       <Link href="/dashboard">
         <Button variant="ghost" className="text-gray-700">ダッシュボード</Button>
       </Link>
+      <Link href="/admin">
+        <Button variant="ghost" className="text-gray-700">管理</Button>
+      </Link>
       <div className="relative ml-4" ref={dropdownRef}>
         <button
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
