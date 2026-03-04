@@ -3,16 +3,35 @@
 import { useAuth } from '@/lib/auth/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+
+type Estimate = {
+  id: string
+  estimateNumber: string
+  tsubo: number
+  totalAmount: number
+  status: string
+  createdAt: string
+  series: { name: string }
+  customer: { name: string } | null
+  user: { name: string | null; email: string }
+}
+
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  DRAFT: { label: '下書き', color: 'bg-gray-100 text-gray-600' },
+  SUBMITTED: { label: '提出済', color: 'bg-blue-100 text-blue-700' },
+  WON: { label: '受注', color: 'bg-green-100 text-green-700' },
+  LOST: { label: '失注', color: 'bg-red-100 text-red-600' },
+}
 
 export default function DashboardPage() {
   const auth = useAuth()
   const user = auth.user
   const router = useRouter()
-  const [deleting, setDeleting] = useState(false)
-  const [message, setMessage] = useState('')
   const [setupChecked, setSetupChecked] = useState(false)
-
-  const isEmailUnverified = Boolean(user && user.email && user.primaryEmailVerified === false)
+  const [estimates, setEstimates] = useState<Estimate[]>([])
+  const [loadingEstimates, setLoadingEstimates] = useState(true)
 
   // 未ログイン時はサインインへ
   useEffect(() => {
@@ -21,14 +40,13 @@ export default function DashboardPage() {
     }
   }, [user, (auth as any).isLoading, router])
 
-  // ログイン後、DB上のUserレコードがあるか確認。なければオンボーディングへ
+  // ログイン後、DB上のUserレコードがあるか確認
   useEffect(() => {
     if (!user || setupChecked) return
     let mounted = true
 
     const checkSetup = async () => {
       try {
-        // localStorageに工務店名があれば自動セットアップを試行
         const pendingName = localStorage.getItem('pending_company_name')
         if (pendingName) {
           const res = await fetch('/api/auth/setup', {
@@ -42,12 +60,9 @@ export default function DashboardPage() {
             return
           }
         }
-
-        // DB User の存在確認
         const res = await fetch('/api/auth/me')
         if (!mounted) return
         if (res.status === 404) {
-          // User未登録 → オンボーディングへ
           router.replace('/onboarding')
           return
         }
@@ -61,88 +76,86 @@ export default function DashboardPage() {
     return () => { mounted = false }
   }, [user, setupChecked, router])
 
+  // 見積一覧取得
+  useEffect(() => {
+    if (!setupChecked) return
+    fetch('/api/estimates')
+      .then(res => res.json())
+      .then(data => { setEstimates(data); setLoadingEstimates(false) })
+      .catch(() => setLoadingEstimates(false))
+  }, [setupChecked])
+
   if (!user || !setupChecked) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50">
-        <div className="text-center p-8 bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">読み込み中...</h2>
-        </div>
+      <main className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
       </main>
     )
   }
 
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 pt-16 pb-8">
-      <div className="container mx-auto px-4">
-        <div className="text-center max-w-xl mx-auto p-6 bg-white rounded-2xl shadow-strong border border-gray-100">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            ようこそ、{user?.displayName || user?.email?.split('@')[0] || 'ユーザー'} さん
-          </h1>
-          <p className="text-gray-600 mb-4">ダッシュボードへようこそ。</p>
+  const fmt = (n: number) => n.toLocaleString()
 
-        {isEmailUnverified && (
-          <div className="mb-4 p-3 rounded-lg border text-xs bg-yellow-50 text-yellow-800 border-yellow-200">
-            メールアドレスが未認証です。<a href="/auth/email-verified" className="underline">認証メールのリンク</a>を確認してください。
+  return (
+    <main className="min-h-screen bg-gray-50 pt-20 pb-8">
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">ダッシュボード</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              ようこそ、{user?.displayName || user?.email?.split('@')[0] || 'ユーザー'} さん
+            </p>
+          </div>
+          <Link href="/estimate/new">
+            <Button>新規見積作成</Button>
+          </Link>
+        </div>
+
+        {loadingEstimates ? (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+          </div>
+        ) : estimates.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+            <p className="text-gray-500 mb-4">見積がまだありません</p>
+            <Link href="/estimate/new">
+              <Button>最初の見積を作成</Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">見積番号</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">シリーズ</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-600">坪数</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">総額（税込）</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-600">ステータス</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">顧客</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">作成日</th>
+                </tr>
+              </thead>
+              <tbody>
+                {estimates.map(est => {
+                  const st = STATUS_LABELS[est.status] || STATUS_LABELS.DRAFT
+                  return (
+                    <tr key={est.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-700">{est.estimateNumber}</td>
+                      <td className="px-4 py-3 text-gray-900">{est.series.name}</td>
+                      <td className="px-4 py-3 text-center text-gray-700">{est.tsubo}坪</td>
+                      <td className="px-4 py-3 text-right font-medium text-gray-900">¥{fmt(est.totalAmount)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.color}`}>{st.label}</span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{est.customer?.name || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{new Date(est.createdAt).toLocaleDateString('ja-JP')}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
-
-        {message && (
-          <div className="mb-6 p-3 rounded-lg border text-sm bg-gray-50 text-gray-700 border-gray-200">{message}</div>
-        )}
-
-        <div className="mt-8 pt-6 border-t border-gray-100">
-          <details className="group">
-            <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-500 transition-colors list-none flex items-center justify-between">
-              <span>アカウント設定</span>
-              <svg className="w-3 h-3 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </summary>
-            <div className="mt-3 space-y-3">
-              <p className="text-xs text-gray-500">退会すると、アカウントと関連データは削除されます。</p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  onClick={async () => {
-                    if (!user || deleting) return
-                    const ok = window.confirm('本当に退会しますか？この操作は取り消せません。')
-                    if (!ok) return
-                    setDeleting(true)
-                    setMessage('退会処理を実行しています…')
-                    try {
-                      const res = await fetch('/api/account/delete', { method: 'POST' })
-                      if (!res.ok) {
-                        const data = await res.json().catch(() => ({}))
-                        if (res.status === 401) {
-                          setMessage('未ログインのため処理できません。')
-                        } else {
-                          setMessage(data.error || '退会に失敗しました。時間をおいて再度お試しください。')
-                        }
-                        return
-                      }
-                      try { await auth.signOut() } catch {}
-                      router.push('/auth/signin')
-                    } catch (e: any) {
-                      console.error('Account deletion failed:', e)
-                      setMessage('退会に失敗しました。時間をおいて再度お試しください。')
-                    } finally {
-                      setDeleting(false)
-                    }
-                  }}
-                  disabled={!user || deleting}
-                  className={`text-xs px-3 py-1.5 rounded border transition-colors ${
-                    deleting
-                      ? 'opacity-40 cursor-not-allowed border-gray-200 text-gray-400'
-                      : 'border-gray-300 text-gray-500 hover:border-red-300 hover:text-red-600 hover:bg-red-50'
-                  }`}
-                >
-                  {deleting ? '処理中…' : '退会'}
-                </button>
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
       </div>
     </main>
   )
