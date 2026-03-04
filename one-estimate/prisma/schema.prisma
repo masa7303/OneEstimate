@@ -7,24 +7,479 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum SubscriptionStatus {
-  active
-  trialing
-  past_due
-  canceled
-  incomplete
-  unpaid
+// ============================================
+// 1. Company（工務店・テナント）
+// ============================================
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                User[]
+  companyInfo          CompanyInfo?
+  customers            Customer[]
+  series               Series[]
+  specLabels           SpecLabel[]
+  optionCategories     OptionCategory[]
+  variationTypes       VariationType[]
+  tsuboCoefficients    TsuboCoefficient[]
+  atriumPrices         AtriumPrice[]
+  roomPriceSetting     RoomPriceSetting?
+  questions            Question[]
+  initialSettings      InitialSetting[]
+  fundingPlanTemplates FundingPlanTemplate[]
+  estimates            Estimate[]
 }
 
-model Subscription {
-  id                     String               @id @default(cuid())
-  userId                 String               @unique  // Neon AuthのUser ID
-  stripeCustomerId       String               @unique
-  stripeSubscriptionId   String               @unique
-  status                 SubscriptionStatus
-  currentPeriodEnd       DateTime?
-  cancelAt               DateTime?
-  cancelAtPeriodEnd      Boolean              @default(false)
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
+// ============================================
+// 2. User（ユーザー）
+// ============================================
+model User {
+  id         String   @id @default(cuid())
+  authUserId String   @unique
+  email      String
+  name       String?
+  role       String   @default("ADMIN") // ADMIN / SALES
+  companyId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  estimates Estimate[]
+}
+
+// ============================================
+// 3. CompanyInfo（会社情報）
+// ============================================
+model CompanyInfo {
+  id        String   @id @default(cuid())
+  companyId String   @unique
+  name      String?
+  address   String?
+  tel       String?
+  fax       String?
+  email     String?
+  logoUrl   String?
+  notes     String?  // 見積書備考テンプレート
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 4. Customer（顧客）
+// ============================================
+model Customer {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  nameKana  String?
+  tel       String?
+  email     String?
+  address   String?
+  memo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  estimates Estimate[]
+}
+
+// ============================================
+// 5. Series（住宅シリーズ）
+// ============================================
+model Series {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  baseCost    Int      // 実行予算（30坪基準・円）= 原価
+  marginRate  Float    @default(0.22) // 粗利益率
+  basePrice   Int      // 販売価格（30坪基準・円）= baseCost ÷ (1−marginRate)。手動上書き可
+  imageUrl    String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company    Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  specValues SeriesSpecValue[]
+  estimates  Estimate[]
+}
+
+// ============================================
+// 6. SpecLabel（仕様項目ラベル）
+// ============================================
+model SpecLabel {
+  id        String   @id @default(cuid())
+  companyId String
+  label     String   // 項目名（例: 耐震等級）
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  company    Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  specValues SeriesSpecValue[]
+}
+
+// ============================================
+// 7. SeriesSpecValue（シリーズ × 仕様項目の交差テーブル）
+// ============================================
+model SeriesSpecValue {
+  id          String @id @default(cuid())
+  seriesId    String
+  specLabelId String
+  value       String // 値（例: 等級3）
+
+  series    Series    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  specLabel SpecLabel @relation(fields: [specLabelId], references: [id], onDelete: Cascade)
+
+  @@unique([seriesId, specLabelId])
+}
+
+// ============================================
+// 8. OptionCategory（オプションカテゴリ）
+// ============================================
+model OptionCategory {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items           OptionItem[]
+  estimateOptions EstimateOption[]
+}
+
+// ============================================
+// 9. OptionItem（オプションアイテム）
+// ============================================
+model OptionItem {
+  id         String   @id @default(cuid())
+  categoryId String
+  name       String
+  description String?
+  cost       Int      @default(0) // 原価
+  price      Int      @default(0) // 販売価格差額
+  imageUrl   String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category        OptionCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  estimateOptions EstimateOption[]
+}
+
+// ============================================
+// 10. VariationType（変動費タイプ）
+// ============================================
+model VariationType {
+  id        String   @id @default(cuid())
+  companyId String
+  slug      String   // layout / roof / outdoor
+  name      String   // 表示名
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items   VariationItem[]
+
+  @@unique([companyId, slug])
+}
+
+// ============================================
+// 11. VariationItem（変動費アイテム）
+// ============================================
+model VariationItem {
+  id              String   @id @default(cuid())
+  variationTypeId String
+  name            String
+  description     String?
+  cost            Int      @default(0) // 原価
+  price           Int      @default(0) // 販売価格差額
+  imageUrl        String?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  variationType VariationType @relation(fields: [variationTypeId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 12. TsuboCoefficient（坪数係数）
+// ============================================
+model TsuboCoefficient {
+  id          String @id @default(cuid())
+  companyId   String
+  tsubo       Int    // 坪数（15〜45）
+  coefficient Float  // 係数（30坪=1.000）
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, tsubo])
+}
+
+// ============================================
+// 13. AtriumPrice（吹き抜け価格）
+// ============================================
+model AtriumPrice {
+  id        String @id @default(cuid())
+  companyId String
+  label     String // なし / 小 / 中 / 大
+  cost      Int    @default(0) // 原価
+  price     Int    @default(0) // 販売価格差額
+  sortOrder Int    @default(0)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 14. RoomPriceSetting（部屋数追加費用）
+// ============================================
+model RoomPriceSetting {
+  id              String @id @default(cuid())
+  companyId       String @unique
+  floor1BaseRooms Int    @default(3)     // 1階基準部屋数
+  floor1UnitCost  Int    @default(91000) // 1階追加原価（円/部屋）
+  floor1UnitPrice Int    @default(91000) // 1階追加販売価格差額（円/部屋）
+  floor2UnitCost  Int    @default(66000) // 2階追加原価（円/部屋）
+  floor2UnitPrice Int    @default(66000) // 2階追加販売価格差額（円/部屋）
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 15. Question（アンケート質問）
+// ============================================
+model Question {
+  id        String   @id @default(cuid())
+  companyId String
+  title     String
+  advice    String?
+  inputType String   @default("CHOICE") // CHOICE / NUMBER
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  choices QuestionChoice[]
+}
+
+// ============================================
+// 16. QuestionChoice（アンケート選択肢）
+// ============================================
+model QuestionChoice {
+  id         String @id @default(cuid())
+  questionId String
+  label      String
+  value      String
+  sortOrder  Int    @default(0)
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 17. Estimate（見積もり）
+// ============================================
+model Estimate {
+  id              String   @id @default(cuid())
+  companyId       String
+  customerId      String?  // 見積書発行時に紐付け
+  userId          String
+  estimateNumber  String   // EST-YYYYMMDD-XXX（工務店単位で採番）
+  seriesId        String
+  tsubo           Int
+
+  // A 基本本体価格
+  sectionA    Int // 税抜
+  sectionATax Int // 消費税
+
+  // B 付帯工事費
+  sectionB    Int // 税抜小計
+  sectionBTax Int // 消費税
+
+  // C オプション工事費（内訳3分割）
+  sectionCVariation Int // C-1 変更工事費
+  sectionCOption    Int // C-2 住設オプション
+  sectionCOther     Int // C-3 その他工事費（工務店設定）
+  sectionC          Int // C 税抜小計
+  sectionCTax       Int // 消費税
+
+  // D その他諸費用
+  sectionD    Int // 税抜小計
+  sectionDTax Int // 消費税
+
+  // 合計
+  totalAmount Int // 税込総額
+
+  // ステータス
+  status           String  @default("DRAFT") // DRAFT / SUBMITTED / WON / LOST
+  isEstimateIssued Boolean @default(false)
+  isFundingIssued  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer      Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  series        Series               @relation(fields: [seriesId], references: [id])
+  variations    EstimateVariation[]
+  options       EstimateOption[]
+  sectionBItems EstimateSectionB[]
+  sectionCItems EstimateSectionC[]
+  sectionDItems EstimateSectionD[]
+  answers       EstimateAnswer[]
+  aiResult      EstimateAiResult?
+  fundingPlan   FundingPlan?
+
+  @@unique([companyId, estimateNumber])
+}
+
+// ============================================
+// 18. EstimateVariation（変動費明細・スナップショット）
+// ============================================
+model EstimateVariation {
+  id         String @id @default(cuid())
+  estimateId String
+  itemType   String // layout / roof / outdoor / atrium / room_floor1 / room_floor2
+  itemName   String // 選択項目名
+  cost       Int    @default(0) // 原価（スナップショット）
+  price      Int    @default(0) // 販売価格差額（スナップショット）
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 19. EstimateOption（オプション明細・スナップショット）
+// ============================================
+model EstimateOption {
+  id         String @id @default(cuid())
+  estimateId String
+  categoryId String
+  itemId     String
+  cost       Int    // 原価（スナップショット）
+  price      Int    // 販売価格差額（スナップショット）
+
+  estimate Estimate   @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  category OptionCategory @relation(fields: [categoryId], references: [id])
+  item     OptionItem     @relation(fields: [itemId], references: [id])
+}
+
+// ============================================
+// 20. EstimateSectionB（付帯工事費明細・スナップショット）
+// ============================================
+model EstimateSectionB {
+  id         String @id @default(cuid())
+  estimateId String
+  itemName   String
+  amount     Int    // 税抜
+  sortOrder  Int    @default(0)
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 21. EstimateSectionC（その他工事費明細・スナップショット）
+// ============================================
+model EstimateSectionC {
+  id         String @id @default(cuid())
+  estimateId String
+  itemName   String
+  amount     Int    // 税抜
+  sortOrder  Int    @default(0)
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 22. EstimateSectionD（その他諸費用明細・スナップショット）
+// ============================================
+model EstimateSectionD {
+  id         String @id @default(cuid())
+  estimateId String
+  itemName   String
+  amount     Int    // 税抜
+  sortOrder  Int    @default(0)
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 23. EstimateAnswer（アンケート回答）
+// ============================================
+model EstimateAnswer {
+  id         String @id @default(cuid())
+  estimateId String
+  questionId String
+  choiceValue String
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 24. EstimateAiResult（AI推薦結果）
+// ============================================
+model EstimateAiResult {
+  id                  String   @id @default(cuid())
+  estimateId          String   @unique
+  summary             String?
+  tags                Json?    // ["省エネ重視", "家事ラク"]
+  recommendations     Json     // [{categoryId, itemIndex, reason}]
+  totalAdditionalCost Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 25. FundingPlan（資金計画書）
+// ============================================
+model FundingPlan {
+  id         String   @id @default(cuid())
+  estimateId String   @unique
+  data       Json     // 資金計画書の全入力データ
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// 26. InitialSetting（工務店初期設定）
+// ============================================
+model InitialSetting {
+  id            String   @id @default(cuid())
+  companyId     String
+  section       String   // B / C / D / E / F
+  itemName      String
+  defaultAmount Int      @default(0) // 税抜
+  isVisible     Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, section, itemName])
+}
+
+// ============================================
+// 27. FundingPlanTemplate（資金計画書テンプレート）
+// ============================================
+model FundingPlanTemplate {
+  id            String   @id @default(cuid())
+  companyId     String
+  section       String   // E / F / G
+  itemName      String
+  defaultAmount Int      @default(0)
+  isVisible     Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
