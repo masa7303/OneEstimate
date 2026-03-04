@@ -835,8 +835,10 @@ sortOrder       Int       @default(0)      -- 表示順
 id              String    @id @default(cuid())
 companyId       String    @unique          -- → Company（所属工務店・1:1）
 floor1BaseRooms Int       @default(3)      -- 1階基準部屋数
-floor1UnitCost  Int       @default(91000)  -- 1階追加単価（円/部屋）
-floor2UnitCost  Int       @default(66000)  -- 2階追加単価（円/部屋）
+floor1UnitCost  Int       @default(91000)  -- 1階追加原価（円/部屋）
+floor1UnitPrice Int       @default(91000)  -- 1階追加販売価格差額（円/部屋）※原価から粗利益率で自動算出、手動上書き可
+floor2UnitCost  Int       @default(66000)  -- 2階追加原価（円/部屋）
+floor2UnitPrice Int       @default(66000)  -- 2階追加販売価格差額（円/部屋）※同上
 ```
 
 **Question（アンケート質問）:**
