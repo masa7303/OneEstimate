@@ -56,9 +56,6 @@ function HeaderAuthed() {
       <Link href="/dashboard">
         <Button variant="ghost" className="text-gray-700">ダッシュボード</Button>
       </Link>
-      <Link href="/billing">
-        <Button variant="ghost" className="text-gray-700">プラン</Button>
-      </Link>
       <div className="relative ml-4" ref={dropdownRef}>
         <button
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -99,7 +96,7 @@ export function Header() {
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-soft group-hover:shadow-medium transition-all duration-200 group-hover:scale-105">
               <Icons.zap className="w-6 h-6 text-white" />
             </div>
-            <span className="font-bold text-xl text-gray-900 group-hover:text-blue-600 transition-colors duration-200">Sample</span>
+            <span className="font-bold text-xl text-gray-900 group-hover:text-blue-600 transition-colors duration-200">OneEstimate</span>
           </Link>
           <nav className="flex items-center gap-2">
             {stackReady ? (
