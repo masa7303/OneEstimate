@@ -139,7 +139,7 @@ export default function DashboardPage() {
                 {estimates.map(est => {
                   const st = STATUS_LABELS[est.status] || STATUS_LABELS.DRAFT
                   return (
-                    <tr key={est.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={est.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/estimate/${est.id}`)}>
                       <td className="px-4 py-3 font-mono text-xs text-gray-700">{est.estimateNumber}</td>
                       <td className="px-4 py-3 text-gray-900">{est.series.name}</td>
                       <td className="px-4 py-3 text-center text-gray-700">{est.tsubo}坪</td>

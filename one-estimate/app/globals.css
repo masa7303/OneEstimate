@@ -119,3 +119,34 @@
 }
 
 html, body { height: 100%; }
+
+/* ===== 印刷用スタイル ===== */
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ツールバー・ヘッダー・フッターを非表示 */
+  .no-print,
+  header,
+  footer,
+  nav {
+    display: none !important;
+  }
+
+  /* 見積書のみ表示 */
+  #estimate-document {
+    margin: 0 !important;
+    padding: 15mm !important;
+    box-shadow: none !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+  }
+}
