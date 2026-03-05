@@ -3,9 +3,17 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { Icons } from '@/components/ui/icons'
 import EstimateDocument from '@/components/estimate/estimate-document'
 import CustomerNameDialog from '@/components/estimate/customer-name-dialog'
 import type { EstimateDetail } from '@/types/estimate'
+
+const STATUS_OPTIONS = [
+  { value: 'DRAFT', label: '下書き' },
+  { value: 'SUBMITTED', label: '提出済' },
+  { value: 'WON', label: '受注' },
+  { value: 'LOST', label: '失注' },
+]
 
 export default function EstimateDetailPage() {
   const router = useRouter()
@@ -17,6 +25,9 @@ export default function EstimateDetailPage() {
   const [error, setError] = useState('')
   const [showCustomerDialog, setShowCustomerDialog] = useState(false)
   const [downloadingExcel, setDownloadingExcel] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
 
   useEffect(() => {
     fetch(`/api/estimates/${id}`)
@@ -96,6 +107,58 @@ export default function EstimateDetailPage() {
     await issueEstimate(customer.id)
   }
 
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      const res = await fetch(`/api/estimates/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (res.ok && data) {
+        setData({ ...data, status: newStatus })
+      }
+    } catch {
+      alert('ステータス変更に失敗しました')
+    }
+  }
+
+  const handleDuplicate = async () => {
+    setDuplicating(true)
+    try {
+      const res = await fetch(`/api/estimates/${id}/duplicate`, { method: 'POST' })
+      if (res.ok) {
+        const newEst = await res.json()
+        router.push(`/estimate/${newEst.id}`)
+      } else {
+        alert('複製に失敗しました')
+      }
+    } catch {
+      alert('複製に失敗しました')
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/estimates/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        router.push('/dashboard')
+      } else {
+        alert('削除に失敗しました')
+        setDeleting(false)
+      }
+    } catch {
+      alert('削除に失敗しました')
+      setDeleting(false)
+    }
+  }
+
+  const handleFundingExcel = async () => {
+    window.open(`/api/estimates/${id}/funding/excel`, '_blank')
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -134,17 +197,39 @@ export default function EstimateDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* ステータス */}
+            <select
+              value={data.status}
+              onChange={e => handleStatusChange(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+            >
+              {STATUS_OPTIONS.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
             <Button variant="outline" size="sm" onClick={handlePrint}>
-              印刷
+              <Icons.printer className="w-3.5 h-3.5 mr-1" />印刷
             </Button>
             <Button variant="outline" size="sm" onClick={handleExcelDownload} disabled={downloadingExcel}>
-              {downloadingExcel ? '生成中...' : 'Excel出力'}
+              <Icons.download className="w-3.5 h-3.5 mr-1" />{downloadingExcel ? '生成中...' : 'Excel'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleFundingExcel}>
+              <Icons.calculator className="w-3.5 h-3.5 mr-1" />資金計画書
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => router.push(`/estimate/new?editId=${id}`)}>
+              <Icons.edit className="w-3.5 h-3.5 mr-1" />編集
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDuplicate} disabled={duplicating}>
+              <Icons.copy className="w-3.5 h-3.5 mr-1" />{duplicating ? '複製中' : '複製'}
             </Button>
             {!data.isEstimateIssued && (
               <Button size="sm" onClick={handleIssue}>
                 発行
               </Button>
             )}
+            <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-50" onClick={() => setShowDeleteDialog(true)}>
+              <Icons.trash className="w-3.5 h-3.5" />
+            </Button>
           </div>
         </div>
       </div>
@@ -162,6 +247,23 @@ export default function EstimateDetailPage() {
         onClose={() => setShowCustomerDialog(false)}
         onSubmit={handleCustomerSubmit}
       />
+
+      {/* 削除確認ダイアログ */}
+      {showDeleteDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">見積を削除しますか？</h3>
+            <p className="text-sm text-gray-600 mb-1">見積番号: <strong>{data.estimateNumber}</strong></p>
+            <p className="text-sm text-red-600 mb-4">関連する全てのデータが削除されます。この操作は取り消せません。</p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setShowDeleteDialog(false)} disabled={deleting}>キャンセル</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDelete} disabled={deleting}>
+                {deleting ? '削除中...' : '削除する'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

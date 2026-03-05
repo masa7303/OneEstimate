@@ -8,7 +8,7 @@ export async function GET() {
     const user = await requireDbUser()
     const cid = user.companyId
 
-    const [series, tsuboCoefficients, variationTypes, optionCategories, initialSettings, atriumPrices, roomSetting] = await Promise.all([
+    const [series, tsuboCoefficients, variationTypes, optionCategories, initialSettings, atriumPrices, roomSetting, questions] = await Promise.all([
       prisma.series.findMany({ where: { companyId: cid }, orderBy: { sortOrder: 'asc' } }),
       prisma.tsuboCoefficient.findMany({ where: { companyId: cid }, orderBy: { tsubo: 'asc' } }),
       prisma.variationType.findMany({
@@ -27,6 +27,11 @@ export async function GET() {
       }),
       prisma.atriumPrice.findMany({ where: { companyId: cid }, orderBy: { sortOrder: 'asc' } }),
       prisma.roomPriceSetting.findUnique({ where: { companyId: cid } }),
+      prisma.question.findMany({
+        where: { companyId: cid },
+        orderBy: { sortOrder: 'asc' },
+        include: { choices: { orderBy: { sortOrder: 'asc' } } },
+      }),
     ])
 
     return NextResponse.json({
@@ -37,6 +42,7 @@ export async function GET() {
       initialSettings,
       atriumPrices,
       roomSetting,
+      questions,
     })
   } catch {
     return NextResponse.json({ error: 'マスターデータの取得に失敗しました' }, { status: 401 })

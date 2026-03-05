@@ -26,7 +26,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // Protect gated routes (Stack/Neon only). For Supabase, let pages handle auth to avoid SSR cookie mismatch.
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/estimate') || pathname.startsWith('/onboarding')) {
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/estimate') || pathname.startsWith('/customers') || pathname.startsWith('/onboarding')) {
     if (hasStackEnv()) {
       try {
         const app = getStackServerApp() as any

@@ -5,6 +5,17 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Icons } from '@/components/ui/icons'
+
+type Stats = {
+  totalEstimates: number
+  draftCount: number
+  submittedCount: number
+  wonCount: number
+  lostCount: number
+  customerCount: number
+  monthlyAmount: number
+}
 
 type Estimate = {
   id: string
@@ -32,6 +43,7 @@ export default function DashboardPage() {
   const [setupChecked, setSetupChecked] = useState(false)
   const [estimates, setEstimates] = useState<Estimate[]>([])
   const [loadingEstimates, setLoadingEstimates] = useState(true)
+  const [stats, setStats] = useState<Stats | null>(null)
 
   // 未ログイン時はサインインへ
   useEffect(() => {
@@ -76,13 +88,41 @@ export default function DashboardPage() {
     return () => { mounted = false }
   }, [user, setupChecked, router])
 
-  // 見積一覧取得
+  // 見積一覧 + 統計取得
   useEffect(() => {
     if (!setupChecked) return
     fetch('/api/estimates')
       .then(res => res.json())
-      .then(data => { setEstimates(data); setLoadingEstimates(false) })
+      .then(data => {
+        setEstimates(data)
+        setLoadingEstimates(false)
+        // 統計を計算
+        const now = new Date()
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const draftCount = data.filter((e: Estimate) => e.status === 'DRAFT').length
+        const submittedCount = data.filter((e: Estimate) => e.status === 'SUBMITTED').length
+        const wonCount = data.filter((e: Estimate) => e.status === 'WON').length
+        const lostCount = data.filter((e: Estimate) => e.status === 'LOST').length
+        const monthlyAmount = data
+          .filter((e: Estimate) => new Date(e.createdAt) >= monthStart)
+          .reduce((sum: number, e: Estimate) => sum + e.totalAmount, 0)
+        setStats(prev => ({
+          ...(prev || { customerCount: 0 }),
+          totalEstimates: data.length,
+          draftCount, submittedCount, wonCount, lostCount, monthlyAmount,
+        }))
+      })
       .catch(() => setLoadingEstimates(false))
+    // 顧客数取得
+    fetch('/api/customers')
+      .then(res => res.json())
+      .then(data => {
+        setStats(prev => ({
+          ...(prev || { totalEstimates: 0, draftCount: 0, submittedCount: 0, wonCount: 0, lostCount: 0, monthlyAmount: 0 }),
+          customerCount: Array.isArray(data) ? data.length : 0,
+        }))
+      })
+      .catch(() => {})
   }, [setupChecked])
 
   if (!user || !setupChecked) {
@@ -105,10 +145,49 @@ export default function DashboardPage() {
               ようこそ、{user?.displayName || user?.email?.split('@')[0] || 'ユーザー'} さん
             </p>
           </div>
-          <Link href="/estimate/new">
-            <Button>新規見積作成</Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/customers">
+              <Button variant="outline">
+                <Icons.users className="w-4 h-4 mr-2" />顧客一覧
+              </Button>
+            </Link>
+            <Link href="/estimate/new">
+              <Button>新規見積作成</Button>
+            </Link>
+          </div>
         </div>
+
+        {/* 統計カード */}
+        {stats && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="text-xs text-gray-500 mb-1">見積総数</div>
+              <div className="text-2xl font-bold text-gray-900">{stats.totalEstimates}</div>
+              <div className="flex gap-2 mt-1 text-xs">
+                <span className="text-gray-500">下書き {stats.draftCount}</span>
+                <span className="text-blue-600">提出済 {stats.submittedCount}</span>
+                <span className="text-green-600">受注 {stats.wonCount}</span>
+              </div>
+            </div>
+            <Link href="/customers" className="bg-white rounded-xl border border-gray-200 p-4 hover:border-blue-300 transition-colors">
+              <div className="text-xs text-gray-500 mb-1">顧客数</div>
+              <div className="text-2xl font-bold text-gray-900">{stats.customerCount}</div>
+              <div className="text-xs text-blue-600 mt-1">一覧を表示 →</div>
+            </Link>
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="text-xs text-gray-500 mb-1">今月の見積金額</div>
+              <div className="text-2xl font-bold text-gray-900">¥{fmt(stats.monthlyAmount)}</div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="text-xs text-gray-500 mb-1">受注率</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {stats.totalEstimates > 0
+                  ? `${Math.round((stats.wonCount / stats.totalEstimates) * 100)}%`
+                  : '—'}
+              </div>
+            </div>
+          </div>
+        )}
 
         {loadingEstimates ? (
           <div className="flex justify-center py-12">

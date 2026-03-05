@@ -119,6 +119,15 @@ export async function POST(req: NextRequest) {
             sortOrder: i,
           })),
         },
+        // アンケート回答
+        answers: {
+          create: (body.answers || []).map((a: any) => ({
+            questionId: a.questionId,
+            choiceValue: a.choiceValue,
+          })),
+        },
+        // 顧客紐付け
+        ...(body.customerId ? { customerId: body.customerId } : {}),
       },
     })
 

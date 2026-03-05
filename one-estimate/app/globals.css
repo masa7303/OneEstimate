@@ -149,4 +149,16 @@ html, body { height: 100%; }
     width: 210mm !important;
     min-height: 297mm !important;
   }
+
+  /* 資金計画書 A3横向き */
+  #funding-document {
+    margin: 0 !important;
+    padding: 10mm !important;
+    box-shadow: none !important;
+  }
+}
+
+@page funding {
+  size: A3 landscape;
+  margin: 10mm;
 }

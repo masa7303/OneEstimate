@@ -56,6 +56,12 @@ function HeaderAuthed() {
       <Link href="/dashboard">
         <Button variant="ghost" className="text-gray-700">ダッシュボード</Button>
       </Link>
+      <Link href="/customers">
+        <Button variant="ghost" className="text-gray-700">顧客</Button>
+      </Link>
+      <Link href="/estimate/new">
+        <Button variant="ghost" className="text-gray-700">新規見積</Button>
+      </Link>
       <Link href="/admin">
         <Button variant="ghost" className="text-gray-700">管理</Button>
       </Link>
