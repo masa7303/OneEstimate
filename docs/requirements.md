@@ -1688,3 +1688,266 @@ updatedAt       DateTime  @updatedAt
 | 3.1 | 2026-03-02 | MTG要約反映: セクション10.0「帳票設計方針」追加 — カテゴリ統一原則、UI/出力の分離、動的/固定金額の分離原則、項目の表示/非表示管理。F-02-17追加 |
 | 4.0 | 2026-03-02 | feedback.md反映: (1)マルチテナント設計: 1工務店=複数ユーザー、Companyテーブル追加、全テーブルにcompanyId (2)権限モデル: ADMIN/SALESの2ロール (3)見積書の税込/税抜統一: 全セクション税抜+消費税別記載 (4)B/D明細スナップショット: EstimateSectionB/Dテーブル追加 (5)Q4予算活用: AI推薦のグレード制限のみ (6)顧客紐付け: 見積書発行時にCustomer作成 (7)AIモデル: gpt-4o品質優先 (8)画像命名: カテゴリ別ディレクトリ+連番 (9)データエクスポート: CSVエクスポート追加 (10)エラーハンドリング: 最低限表示+コンソールログ |
 | 5.0 | 2026-03-04 | feedback.md(2回目)反映: (1)Series/SpecLabel等マスターテーブルにcompanyId追加 (2)欠落テーブル16種の詳細定義追加(OptionCategory/OptionItem/VariationType/VariationItem/TsuboCoefficient/AtriumPrice/RoomPriceSetting/Question/QuestionChoice/EstimateVariation/EstimateSectionC/EstimateAiResult/InitialSetting/FundingPlanTemplate/CompanyInfo) (3)EstimateVariationをスナップショット方式で定義 (4)EstimateSectionC追加(工務店設定分のスナップショット) (5)InitialSettingをセクション別行管理方式で定義 (6)Estimate.sectionCを内訳3分割(Variation/Option/Other) (7)estimateNumberを@@unique([companyId,estimateNumber])に変更 (8)見積書の各セクションに消費税行を明示 (9)F-05-08に顧客名未入力時のバリデーション追加 (10)F-07-07に再編集時スナップショット更新ポリシー追加 (11)F-01-09〜11追加(工務店作成・ユーザー招待・ロール変更) |
+
+---
+
+## 13. ユーザー画面遷移 — 残機能実装計画
+
+### 13.1 現状 vs 要件の差分
+
+#### 実装済み
+- Auth（signin/signup/password-reset/onboarding）
+- Dashboard（見積一覧テーブル + クリック→詳細遷移）
+- `/estimate/new` — 見積シミュレーション（単一ページ、A〜Dセクション一括入力）
+- `/estimate/[id]` — 見積詳細（プレビュー/印刷/Excel/発行）
+- `/admin/*` — シリーズ/オプション/変動費/初期設定/坪数係数/アンケート/会社情報
+- 顧客は見積発行時にインラインで名前のみ作成（CustomerNameDialog）
+
+#### 未実装（画面遷移に関わるもの）
+
+| # | 機能 | 要件ID | 優先度 |
+|---|------|--------|--------|
+| 1 | 顧客一覧 `/customers` | F-07-01 | 必須 |
+| 2 | 顧客新規作成 `/customers/new` | F-07-03 | 必須 |
+| 3 | 顧客詳細 `/customers/[id]` | F-07-02/04/05/06 | 必須 |
+| 4 | 顧客編集 | F-07-03 | 必須 |
+| 5 | 顧客検索・フィルタ | F-07-10 | 高 |
+| 6 | 顧客削除 | F-07-11 | 必須 |
+| 7 | 5ステップ化（シミュレーション分割） | F-03-14/15 | 必須 |
+| 8 | アンケートステップ | F-03-10/11 | 必須 |
+| 9 | AI推薦（OpenAI連携） | F-04-01〜10 | 必須 |
+| 10 | 資金計画書 `/estimate/[id]/funding` | F-06-01〜16 | 必須 |
+| 11 | 見積再編集 | F-07-07 | 必須 |
+| 12 | 見積ステータス管理 | F-07-09 | 高 |
+| 13 | 見積複製 | F-07-12 | 中 |
+| 14 | 見積削除 | — | 必須 |
+
+### 13.2 実装計画（5フェーズ）
+
+実装順序: **Phase A → B → C → D → E**
+
+| Phase | 内容 | 理由 |
+|-------|------|------|
+| A | 顧客管理（F-07） | 独立性が高く既存機能への影響が少ない。他フェーズの基盤 |
+| B | 5ステップ化 + アンケート + AI推薦（F-03/F-04） | 最大の変更。既存の `/estimate/new` をリファクタ。顧客連携を活用 |
+| C | 資金計画書（F-06） | Phase Bの5ステップ目。見積データへの依存あり |
+| D | 再編集・ステータス管理・複製・削除（F-07-07/09/11/12） | Phase Bのウィザード完成が前提 |
+| E | ダッシュボード強化 + ナビゲーション整理 | 全機能完成後の仕上げ |
+
+#### Phase A: 顧客管理（F-07）
+
+**新規ファイル:**
+
+| ファイル | 内容 |
+|---------|------|
+| `app/customers/page.tsx` | 顧客一覧（検索・フィルタ付きテーブル） |
+| `app/customers/new/page.tsx` | 顧客新規作成フォーム |
+| `app/customers/[id]/page.tsx` | 顧客詳細（基本情報 + 見積一覧 + 資金計画書一覧） |
+| `app/customers/[id]/edit/page.tsx` | 顧客編集フォーム |
+| `app/api/customers/route.ts` | GET一覧（検索・フィルタ対応）※既存POSTに追加 |
+| `app/api/customers/[id]/route.ts` | GET/PUT/DELETE |
+
+**顧客一覧画面:**
+- テーブル表示: 名前、フリガナ、TEL、見積件数、最終更新日
+- 検索: 名前テキスト検索
+- フィルタ: ステータス（見積のステータスで絞り込み）
+- 「新規顧客」ボタン → `/customers/new`、行クリック → `/customers/[id]`
+
+**顧客詳細画面:**
+- 上部: 基本情報カード（名前/フリガナ/TEL/メール/住所/メモ）+ 編集ボタン
+- 中部: 見積一覧テーブル（estimateNumber, series, tsubo, totalAmount, status, createdAt）
+- 下部: 資金計画書一覧（Phase Cで追加）
+- 「顧客削除」ボタン（確認ダイアログ付き、紐付きデータも全削除）
+
+**顧客フォーム（新規/編集共通）:**
+- フィールド: 名前（必須）、フリガナ、TEL、メール、住所、メモ
+- バリデーション: 名前必須
+
+**修正ファイル:**
+
+| ファイル | 変更 |
+|---------|------|
+| `components/header.tsx` | ナビに「顧客」リンク追加 |
+| `app/dashboard/page.tsx` | 顧客数の統計カード追加 + 「顧客一覧」リンク |
+
+#### Phase B: 5ステップ化 + アンケート + AI推薦（F-03/F-04）
+
+**画面フロー:**
+
+```
+/estimate/new (or /estimate/new?customerId=xxx)
+  Step 1: シリーズ選択 + 坪数 + 変動費（間取り/屋根/外部空間/吹き抜け/部屋数）
+  Step 2: アンケート回答（動的質問、各4択 + 数値入力）
+  [AI分析中演出] → AIおすすめパネル
+  Step 3: オプション選択（カテゴリ別カード、排他選択）
+  Step 4: 見積提示（A+B+C+Dテーブル + プレビュー/印刷/Excel/発行）
+  Step 5: 資金計画書（Phase Cで実装）
+```
+
+**ステップ共通UI:**
+- ステップインジケーター（Step 1〜5、現在位置ハイライト）
+- 「前へ」「次へ」ボタン
+- リアルタイムサイドバー（右側固定、金額自動更新）
+- ステップ遷移時にデータを状態管理（React state、ステップ完了時にDB保存）
+
+**新規ファイル:**
+
+| ファイル | 内容 |
+|---------|------|
+| `components/estimate/step-indicator.tsx` | ステップインジケーター |
+| `components/estimate/sidebar-summary.tsx` | リアルタイム金額サイドバー |
+| `components/estimate/step1-series.tsx` | Step1: シリーズ+変動費 |
+| `components/estimate/step2-questionnaire.tsx` | Step2: アンケート |
+| `components/estimate/step3-options.tsx` | Step3: オプション選択 |
+| `components/estimate/step4-estimate.tsx` | Step4: 見積提示 |
+| `components/estimate/ai-recommendation.tsx` | AI推薦パネル+演出 |
+| `app/api/ai/recommend/route.ts` | OpenAI API呼び出し |
+
+**修正ファイル:**
+
+| ファイル | 変更 |
+|---------|------|
+| `app/estimate/new/page.tsx` | 単一フォーム → ステップウィザードに全面リファクタ |
+| `app/api/estimates/route.ts` | POST: アンケート回答(EstimateAnswer)の保存追加 |
+| `app/api/estimates/[id]/route.ts` | PATCH: 再編集対応（各セクション更新） |
+
+**AI推薦の実装:**
+- `/api/ai/recommend` — POST: アンケート回答+シリーズ情報+オプション一覧 → OpenAI gpt-4o → JSON構造化レスポンス
+- フォールバック: `OPENAI_API_KEY` 未設定 or APIエラー時はルールベース推薦
+- 分析中演出: フルスクリーンオーバーレイ + プログレスバー（2.8秒〜API応答）
+- 結果: `EstimateAiResult` に保存
+- おすすめパネル: サマリー + タグ + 各オプションの推薦理由 + 「一括選択」ボタン
+
+#### Phase C: 資金計画書（F-06）
+
+**画面フロー:**
+
+```
+Step 5（/estimate/new のStep5）or /estimate/[id] のツールバー「資金計画書」ボタン
+  → 資金計画書編集画面
+  → プレビュー/印刷/Excel出力
+```
+
+**7セクション構成:**
+
+| セクション | 内容 | データソース |
+|-----------|------|------------|
+| A 建物工事費 | 本体工事費用 + 消費税 | 見積のsectionA自動連動 |
+| B 付帯工事費 | 初期設定項目 | 見積のsectionBItems自動連動 |
+| C 変動工事・オプション | 変更工事費+住設オプション+その他 | 見積のsectionC自動連動 |
+| D その他諸経費 | 地鎮祭・引越等 | 見積のsectionDItems自動連動 |
+| E 事務手数料 | 登記・融資・水道・保険 | InitialSetting(section=E) + 手動編集 |
+| F 土地費用 | 土地購入+仲介手数料等 | アンケートQ4(土地予算)連動 + InitialSetting(section=F) |
+| G 補助金等 | ZEH・自治体補助金（マイナス計上） | FundingPlanTemplate(section=G) + 手動編集 |
+
+**ローン計算:**
+- 1口のローン: 借入金額 = 費用総額 - 自己資金
+- PMT関数: `月々返済額 = 借入額 × r(1+r)^n / ((1+r)^n - 1)` (r=月利, n=返済月数)
+- 入力: 自己資金、借入金額、金利(%)、返済期間(年)
+
+**新規ファイル:**
+
+| ファイル | 内容 |
+|---------|------|
+| `components/estimate/step5-funding.tsx` | Step5: 資金計画書入力 |
+| `components/estimate/funding-document.tsx` | 資金計画書プレビュー（A3横） |
+| `app/api/estimates/[id]/funding/route.ts` | GET/POST: FundingPlan CRUD |
+| `app/api/estimates/[id]/funding/excel/route.ts` | Excel出力（A3横向き） |
+
+**修正ファイル:**
+
+| ファイル | 変更 |
+|---------|------|
+| `app/estimate/[id]/page.tsx` | ツールバーに「資金計画書」ボタン追加 |
+| `app/globals.css` | `@media print` にA3横向きルール追加 |
+
+#### Phase D: 見積再編集・ステータス管理・複製・削除（F-07-07/09/11/12）
+
+**見積再編集:**
+- `/estimate/[id]` のツールバーに「編集」ボタン追加
+- クリック → `/estimate/new?editId=xxx` でウィザードを編集モードで開く
+- 編集モード: 既存データをプリフィルして各ステップを編集可能に
+- 保存時: マスターデータ最新値で再計算 → 既存Estimateを上書き更新（PATCH）
+
+**ステータス管理:**
+- `/estimate/[id]` のツールバーにステータス変更ドロップダウン
+- DRAFT → SUBMITTED → WON/LOST
+- ダッシュボード・顧客詳細のテーブルにステータスバッジ表示（既存）
+
+**見積複製:**
+- `/estimate/[id]` のツールバーに「複製」ボタン
+- POST `/api/estimates/[id]/duplicate` → 新しいEstimate作成（新番号採番）→ 新IDに遷移
+
+**見積削除:**
+- `/estimate/[id]` のツールバーに「削除」ボタン（確認ダイアログ付き）
+- DELETE `/api/estimates/[id]` → 関連データ全削除 → ダッシュボードに遷移
+
+**新規ファイル:**
+
+| ファイル | 内容 |
+|---------|------|
+| `app/api/estimates/[id]/duplicate/route.ts` | POST: 見積複製 |
+
+**修正ファイル:**
+
+| ファイル | 変更 |
+|---------|------|
+| `app/api/estimates/[id]/route.ts` | DELETE追加、PATCH拡張（ステータス変更+全セクション更新） |
+| `app/estimate/[id]/page.tsx` | 編集/複製/削除/ステータス変更UI追加 |
+| `app/estimate/new/page.tsx` | `?editId=xxx` 対応（編集モード） |
+
+#### Phase E: ダッシュボード強化 + ナビゲーション整理
+
+**ダッシュボード:**
+- 統計カード: 見積数（ステータス別）、顧客数、今月の見積金額
+- クイックアクション: 新規見積作成、顧客一覧
+- 最近の見積一覧テーブル（現状維持）
+
+**ヘッダーナビ:**
+- ダッシュボード / 顧客 / 新規見積 / 管理画面（ADMIN only）
+
+**修正ファイル:**
+
+| ファイル | 変更 |
+|---------|------|
+| `app/dashboard/page.tsx` | 統計カード追加 |
+| `components/header.tsx` | ナビリンク整理 |
+
+### 13.3 完成後の画面遷移図
+
+```
+/auth/signin → /dashboard
+  │
+  ├── /customers                    ← Phase A
+  │   ├── /customers/new            ← Phase A
+  │   └── /customers/[id]           ← Phase A
+  │       ├── /customers/[id]/edit  ← Phase A
+  │       ├── → /estimate/[id]      (既存)
+  │       └── → /estimate/new?customerId=xxx  ← Phase B
+  │
+  ├── /estimate/new                 ← Phase B（5ステップ化）
+  │   ├── Step 1: シリーズ+変動費
+  │   ├── Step 2: アンケート        ← Phase B
+  │   ├── [AI推薦]                  ← Phase B
+  │   ├── Step 3: オプション
+  │   ├── Step 4: 見積提示          (既存ロジック活用)
+  │   └── Step 5: 資金計画書        ← Phase C
+  │
+  ├── /estimate/[id]                (既存 + Phase D拡張)
+  │   ├── プレビュー/印刷/Excel     (既存)
+  │   ├── 発行                      (既存)
+  │   ├── 編集/複製/削除            ← Phase D
+  │   ├── ステータス管理            ← Phase D
+  │   └── 資金計画書                ← Phase C
+  │
+  └── /admin/*                      (既存)
+```
+
+### 13.4 検証方法
+
+1. **Phase A**: 顧客一覧→新規作成→詳細表示→編集→削除の一連フロー
+2. **Phase B**: ダッシュボード→新規見積→Step1〜4をウィザード形式で遷移→見積保存→詳細表示
+3. **Phase B-AI**: アンケート回答後→AI分析演出→おすすめパネル→一括選択→Step3反映
+4. **Phase C**: Step4完了→Step5（資金計画書）→E/F/G入力→ローン計算→Excel出力（A3横）
+5. **Phase D**: 既存見積の編集→再計算確認、複製→新番号確認、削除→確認ダイアログ→削除完了
+6. **Phase E**: ダッシュボードの統計表示、ヘッダーナビの遷移確認
