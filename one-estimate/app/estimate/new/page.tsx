@@ -13,12 +13,12 @@ import { Step4Estimate } from '@/components/estimate/step4-estimate'
 import { Step5Funding } from '@/components/estimate/step5-funding'
 import { AiRecommendation } from '@/components/estimate/ai-recommendation'
 
-type Series = { id: string; name: string; baseCost: number; marginRate: number; basePrice: number }
+type Series = { id: string; name: string; description?: string; baseCost: number; marginRate: number; basePrice: number; imageUrl?: string | null }
 type TsuboCoef = { tsubo: number; coefficient: number }
 type VType = { id: string; slug: string; name: string; items: VItem[] }
-type VItem = { id: string; name: string; cost: number; price: number }
+type VItem = { id: string; name: string; cost: number; price: number; imageUrl?: string | null }
 type OptCat = { id: string; name: string; items: OptItem[] }
-type OptItem = { id: string; name: string; cost: number; price: number }
+type OptItem = { id: string; name: string; cost: number; price: number; imageUrl?: string | null }
 type ISetting = { id: string; section: string; itemName: string; defaultAmount: number }
 type AtriumPrice = { label: string; cost: number; price: number }
 type RoomSetting = { floor1BaseRooms: number; floor1UnitCost: number; floor1UnitPrice: number; floor2UnitCost: number; floor2UnitPrice: number }
@@ -63,8 +63,8 @@ export default function EstimateNewPage() {
   // Step 2 State
   const [answers, setAnswers] = useState<Record<string, string>>({})
 
-  // Step 3 State
-  const [optionSelections, setOptionSelections] = useState<Record<string, boolean>>({})
+  // Step 3 State (カテゴリID → 選択アイテムID)
+  const [optionSelections, setOptionSelections] = useState<Record<string, string>>({})
 
   // マスターデータ取得
   useEffect(() => {
@@ -95,6 +95,27 @@ export default function EstimateNewPage() {
 
         if (data.series?.length) setSeriesId(data.series[0].id)
 
+        // オプションのデフォルト選択（各カテゴリの最初のアイテム＝標準仕様）
+        const defaultOpts: Record<string, string> = {}
+        ;(data.optionCategories || []).forEach((cat: OptCat) => {
+          if (cat.items.length > 0) {
+            // price=0の最初のアイテムを標準として選択、なければ最初のアイテム
+            const stdItem = cat.items.find(i => i.price === 0) || cat.items[0]
+            defaultOpts[cat.id] = stdItem.id
+          }
+        })
+        setOptionSelections(defaultOpts)
+
+        // 変動費のデフォルト選択（各タイプの最初のアイテム）
+        const defaultVars: Record<string, string> = {}
+        ;(data.variationTypes || []).forEach((vt: VType) => {
+          if (vt.items.length > 0) {
+            const stdItem = vt.items.find(i => i.price === 0) || vt.items[0]
+            defaultVars[vt.id] = stdItem.id
+          }
+        })
+        setVariationSelections(defaultVars)
+
         // 編集モードの場合、既存データをロード
         if (editId) {
           const editRes = await fetch(`/api/estimates/${editId}`)
@@ -112,9 +133,11 @@ export default function EstimateNewPage() {
               }
             })
             setVariationSelections(vSel)
-            // オプションの復元
-            const oSel: Record<string, boolean> = {}
-            est.options?.forEach((o: { itemId: string }) => { oSel[o.itemId] = true })
+            // オプションの復元（排他選択: カテゴリID → アイテムID）
+            const oSel: Record<string, string> = {}
+            est.options?.forEach((o: { categoryId: string; itemId: string }) => {
+              oSel[o.categoryId] = o.itemId
+            })
             setOptionSelections(oSel)
             // セクション金額の復元
             const bAmt: Record<string, number> = {}
@@ -188,12 +211,14 @@ export default function EstimateNewPage() {
     let total = 0
     const items: { categoryId: string; itemId: string; cost: number; price: number }[] = []
     optionCategories.forEach(cat => {
-      cat.items.forEach(item => {
-        if (optionSelections[item.id]) {
+      const selectedItemId = optionSelections[cat.id]
+      if (selectedItemId) {
+        const item = cat.items.find(i => i.id === selectedItemId)
+        if (item && item.price !== 0) {
           total += item.price
           items.push({ categoryId: cat.id, itemId: item.id, cost: item.cost, price: item.price })
         }
-      })
+      }
     })
     return { total, items }
   }
@@ -229,7 +254,16 @@ export default function EstimateNewPage() {
   }
 
   const handleAiApply = (selections: Record<string, boolean>) => {
-    setOptionSelections({ ...optionSelections, ...selections })
+    // AI推薦はRecord<string, boolean>（itemId→true）で返す。排他選択に変換する
+    const newSel = { ...optionSelections }
+    optionCategories.forEach(cat => {
+      cat.items.forEach(item => {
+        if (selections[item.id]) {
+          newSel[cat.id] = item.id
+        }
+      })
+    })
+    setOptionSelections(newSel)
     setShowAiPanel(false)
     setCurrentStep(3)
   }
