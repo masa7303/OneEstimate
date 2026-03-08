@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { ImageUpload } from '@/components/ui/image-upload'
 import Link from 'next/link'
 
 export default function SeriesEditPage() {
@@ -16,6 +17,7 @@ export default function SeriesEditPage() {
   const [description, setDescription] = useState('')
   const [baseCost, setBaseCost] = useState('')
   const [marginRate, setMarginRate] = useState('')
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/admin/series')
@@ -27,6 +29,7 @@ export default function SeriesEditPage() {
           setDescription(s.description || '')
           setBaseCost(String(s.baseCost))
           setMarginRate(String(s.marginRate * 100))
+          setImageUrl(s.imageUrl || null)
         }
         setLoading(false)
       })
@@ -53,6 +56,7 @@ export default function SeriesEditPage() {
         description,
         baseCost: parseInt(baseCost, 10),
         marginRate: parseFloat(marginRate) / 100,
+        imageUrl,
       }),
     })
 
@@ -79,6 +83,7 @@ export default function SeriesEditPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+        <ImageUpload value={imageUrl} onChange={setImageUrl} label="シリーズ画像" />
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">シリーズ名 <span className="text-red-500">*</span></label>
           <input

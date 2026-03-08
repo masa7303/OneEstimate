@@ -30,6 +30,7 @@ export async function PUT(req: NextRequest) {
         fax: body.fax ?? null,
         email: body.email ?? null,
         notes: body.notes ?? null,
+        logoUrl: body.logoUrl !== undefined ? body.logoUrl : undefined,
       },
       create: {
         companyId: user.companyId,
@@ -39,6 +40,7 @@ export async function PUT(req: NextRequest) {
         fax: body.fax ?? null,
         email: body.email ?? null,
         notes: body.notes ?? null,
+        logoUrl: body.logoUrl ?? null,
       },
     })
 

@@ -25,6 +25,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ item
         description: description ?? item.description,
         cost: cost != null ? parseInt(cost, 10) : item.cost,
         price: price != null ? parseInt(price, 10) : item.price,
+        imageUrl: body.imageUrl !== undefined ? body.imageUrl : undefined,
       },
     })
 

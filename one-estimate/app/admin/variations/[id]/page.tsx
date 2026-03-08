@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { ImageUpload } from '@/components/ui/image-upload'
 
 type VItem = {
   id: string
@@ -11,6 +12,7 @@ type VItem = {
   description: string | null
   cost: number
   price: number
+  imageUrl: string | null
   sortOrder: number
 }
 
@@ -27,12 +29,14 @@ export default function VariationItemsPage() {
   const [formDesc, setFormDesc] = useState('')
   const [formCost, setFormCost] = useState('')
   const [formPrice, setFormPrice] = useState('')
+  const [formImageUrl, setFormImageUrl] = useState<string | null>(null)
 
   const [editId, setEditId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editCost, setEditCost] = useState('')
   const [editPrice, setEditPrice] = useState('')
+  const [editImageUrl, setEditImageUrl] = useState<string | null>(null)
 
   const fetchItems = () => {
     fetch(`/api/admin/variations/${id}/items`)
@@ -49,9 +53,9 @@ export default function VariationItemsPage() {
     await fetch(`/api/admin/variations/${id}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: formName, description: formDesc, cost: formCost, price: formPrice }),
+      body: JSON.stringify({ name: formName, description: formDesc, cost: formCost, price: formPrice, imageUrl: formImageUrl }),
     })
-    setFormName(''); setFormDesc(''); setFormCost(''); setFormPrice('')
+    setFormName(''); setFormDesc(''); setFormCost(''); setFormPrice(''); setFormImageUrl(null)
     setShowForm(false)
     fetchItems()
   }
@@ -60,7 +64,7 @@ export default function VariationItemsPage() {
     await fetch(`/api/admin/variations/items/${itemId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editName, description: editDesc, cost: editCost, price: editPrice }),
+      body: JSON.stringify({ name: editName, description: editDesc, cost: editCost, price: editPrice, imageUrl: editImageUrl }),
     })
     setEditId(null)
     fetchItems()
@@ -78,6 +82,7 @@ export default function VariationItemsPage() {
     setEditDesc(item.description || '')
     setEditCost(String(item.cost))
     setEditPrice(String(item.price))
+    setEditImageUrl(item.imageUrl || null)
   }
 
   const fmt = (n: number) => n.toLocaleString()
@@ -120,6 +125,9 @@ export default function VariationItemsPage() {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
             </div>
           </div>
+          <div className="col-span-2">
+            <ImageUpload value={formImageUrl} onChange={setFormImageUrl} label="画像" />
+          </div>
           <div className="flex gap-2">
             <Button type="submit" size="sm">追加</Button>
             <Button type="button" variant="outline" size="sm" onClick={() => setShowForm(false)}>キャンセル</Button>
@@ -152,6 +160,9 @@ export default function VariationItemsPage() {
                           className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
                         <input type="text" value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="説明"
                           className="w-full border border-gray-300 rounded px-2 py-1 text-sm mt-1" />
+                        <div className="mt-2">
+                          <ImageUpload value={editImageUrl} onChange={setEditImageUrl} label="画像" />
+                        </div>
                       </td>
                       <td className="px-4 py-2">
                         <input type="number" value={editCost} onChange={e => setEditCost(e.target.value)}
@@ -171,8 +182,15 @@ export default function VariationItemsPage() {
                   ) : (
                     <>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">{item.name}</div>
-                        {item.description && <div className="text-xs text-gray-500">{item.description}</div>}
+                        <div className="flex items-center gap-3">
+                          {item.imageUrl && (
+                            <img src={item.imageUrl} alt={item.name} className="w-10 h-10 object-cover rounded border border-gray-200" />
+                          )}
+                          <div>
+                            <div className="font-medium text-gray-900">{item.name}</div>
+                            {item.description && <div className="text-xs text-gray-500">{item.description}</div>}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right text-gray-700">¥{fmt(item.cost)}</td>
                       <td className="px-4 py-3 text-right text-gray-700">¥{fmt(item.price)}</td>

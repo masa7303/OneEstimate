@@ -37,6 +37,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         baseCost: cost,
         marginRate: rate,
         basePrice,
+        imageUrl: body.imageUrl !== undefined ? body.imageUrl : undefined,
       },
     })
 

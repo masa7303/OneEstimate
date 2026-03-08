@@ -50,6 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         description: description || null,
         cost: parseInt(cost, 10) || 0,
         price: parseInt(price, 10) || 0,
+        imageUrl: body.imageUrl ?? null,
         sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
       },
     })

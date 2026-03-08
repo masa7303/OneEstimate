@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
         baseCost: cost,
         marginRate: rate,
         basePrice,
+        imageUrl: body.imageUrl ?? null,
         sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
       },
     })
